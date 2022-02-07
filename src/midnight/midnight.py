@@ -6,6 +6,8 @@ import numpy as np
 
 N_DICE = 6  # Number of dice the game is played with
 MUST_HAVE_VALUES: Set[int] = set([1, 4])  # Values a player must have in order to score
+INF_STAKE = 100000000
+ANTE = 1
 
 
 def roll_dice(n: int) -> List[int]:
@@ -128,35 +130,52 @@ class Player:
     PLAYER_NUMBER: int = 0
 
     def __init__(
-        self, strategy: Strategy = BaseStrategy(), name: Optional[str] = None
+        self,
+        initial_stake: Optional[int] = None,
+        strategy: Strategy = BaseStrategy(),
+        name: Optional[str] = None,
     ) -> None:
         Player.PLAYER_NUMBER += 1
         self._name = name if name is not None else f"Player{self.PLAYER_NUMBER}"
         self.strategy = strategy
         self.kept_dice: List[int] = []
+        self.initial_stake: int = (
+            initial_stake if initial_stake is not None else INF_STAKE
+        )
+        self.stake = self.initial_stake
         pass
 
     @property
     def name(self):
         return self._name
 
+    @property
+    def relative_stake(self) -> int:
+        return self.stake - self.initial_stake
+
     def play_hand(
         self,
         top_score: Optional[Score] = None,
         players_left: Optional[int] = None,
     ):
-        if self.has_finished():
-            return
+        self.stake -= 2 * ANTE
+        while not self.has_finished():
+            rolled_dice = roll_dice(N_DICE - len(self.kept_dice))
+            new_dice_to_keep = self.strategy.play(
+                self.kept_dice, rolled_dice, top_score, players_left
+            )
+            self.pick_dice(new_dice_to_keep)
+            if self.qualifies():
+                self.stake += ANTE
 
-        rolled_dice = roll_dice(N_DICE - len(self.kept_dice))
-        new_dice_to_keep = self.strategy.play(
-            self.kept_dice, rolled_dice, top_score, players_left
-        )
-
+    def pick_dice(self, new_dice_to_keep: List[int]) -> None:
         self.kept_dice.extend(new_dice_to_keep)
 
     def has_finished(self):
         return len(self.kept_dice) == N_DICE
+
+    def qualifies(self) -> bool:
+        return MUST_HAVE_VALUES.issubset(self.kept_dice)
 
     @property
     def score(self) -> Score:
@@ -223,6 +242,14 @@ class Game:
     def top_score(self) -> Score:
         return Score(max(list(self.scores.values())))
 
+    @property
+    def stakes(self) -> Dict[str, int]:
+        return {player.name: player.stake for player in self.players}
+
+    @property
+    def relative_stakes(self) -> Dict[str, int]:
+        return {player.name: player.relative_stake for player in self.players}
+
 
 if __name__ == "__main__":
 
@@ -240,13 +267,23 @@ if __name__ == "__main__":
 
     n_games = 10000
     scores = np.zeros((n_games, 2))
+    relative_stakes = np.zeros((n_games, 2))
 
     for i in range(n_games):
         game = Game()
-        game.add_player(Player(strategy=BaseStrategy()))
-        game.add_player(Player(strategy=KeepMaxStrategy()))
+        player1 = Player(strategy=BaseStrategy())
+        player2 = Player(strategy=KeepMaxStrategy())
+        game.add_player(player1)
+        game.add_player(player2)
         game.play()
         scores[i] = np.array(list((game.scores.values())))
+        relative_stakes[i] = np.array(list(game.relative_stakes.values()))
 
-    print(scores.mean(axis=0), scores.std(axis=0))
+    print("Scores")
+    print("mean =", scores.mean(axis=0))
+    print("std  =", scores.std(axis=0))
     print("Player 1 win rate:", (scores[:, 1] < scores[:, 0]).mean())
+
+    print("Relative_stakes")
+    print("mean =", relative_stakes.mean(axis=0))
+    print("std  =", relative_stakes.std(axis=0))
