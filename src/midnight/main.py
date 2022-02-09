@@ -64,30 +64,6 @@ class SimpleStrategy:
         return MUST_HAVE_VALUES.issubset(dice)
 
 
-class BaseStrategy(SimpleStrategy):
-    """
-    Rules:
-
-    - If player does not have a 1 and it is rolled, pick it.
-    - If player does not have a 4 and it is rolled, pick it.
-    - If no dice has been picked, pick the highest one.
-    """
-
-    @staticmethod
-    def play(
-        picked_dice: List[int],
-        rolled_dice: List[int],
-    ) -> List[int]:
-        new_dice_to_pick = []
-        for value in MUST_HAVE_VALUES:
-            if value not in picked_dice and value in rolled_dice:
-                new_dice_to_pick.append(value)
-
-        if len(new_dice_to_pick) == 0:
-            new_dice_to_pick.append(max(rolled_dice))
-        return new_dice_to_pick
-
-
 class ConservativeStrategy(SimpleStrategy):
     """
     Rules:
