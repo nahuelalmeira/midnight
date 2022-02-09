@@ -1,6 +1,7 @@
 from collections import defaultdict
 from abc import abstractmethod
-from typing import Optional, Set, List, Dict, Any
+from dataclasses import dataclass
+from typing import Optional, Set, List, Dict, Any, Iterable
 
 import numpy as np
 import pandas as pd
@@ -19,6 +20,10 @@ class InvalidScoreException(BaseException):
     pass
 
 
+class NoPlayerException(BaseException):
+    pass
+
+
 class Score(int):
     @staticmethod
     def is_valid_score(score: int) -> bool:
@@ -30,7 +35,98 @@ class Score(int):
         return super(Score, cls).__new__(cls, score)
 
 
-class Strategy:
+@dataclass
+class RoundStats:
+    round: int
+    winner: str
+    pot: int
+    scores: List[Score]
+
+
+class SimpleStrategy:
+    def __init__(self):
+        pass
+
+    @classmethod
+    @abstractmethod
+    def play(
+        cls,
+        picked_dice: List[int],
+        rolled_dice: List[int],
+    ) -> List[int]:
+        """
+        Decides which of the rolled dice have to be picked.
+        """
+        pass
+
+    @staticmethod
+    def dice_qualify(dice: Iterable[int]) -> bool:
+        return MUST_HAVE_VALUES.issubset(dice)
+
+
+class BaseStrategy(SimpleStrategy):
+    """
+    Rules:
+
+    - If player does not have a 1 and it is rolled, pick it.
+    - If player does not have a 4 and it is rolled, pick it.
+    - If no dice has been picked, pick the highest one.
+    """
+
+    @staticmethod
+    def play(
+        picked_dice: List[int],
+        rolled_dice: List[int],
+    ) -> List[int]:
+        new_dice_to_pick = []
+        for value in MUST_HAVE_VALUES:
+            if value not in picked_dice and value in rolled_dice:
+                new_dice_to_pick.append(value)
+
+        if len(new_dice_to_pick) == 0:
+            new_dice_to_pick.append(max(rolled_dice))
+        return new_dice_to_pick
+
+
+class ConservativeStrategy(SimpleStrategy):
+    """
+    Rules:
+
+    TODO: add rules
+    """
+
+    @classmethod
+    def play(
+        cls,
+        picked_dice: List[int],
+        rolled_dice: List[int],
+    ) -> List[int]:
+
+        new_dice_to_pick = []
+        if cls.dice_qualify(picked_dice):
+            new_dice_to_pick += cls.pick_when_qualifies(rolled_dice)
+        else:
+            for value in MUST_HAVE_VALUES:
+                if value not in picked_dice and value in rolled_dice:
+                    new_dice_to_pick.append(value)
+                    rolled_dice.remove(value)
+            if len(new_dice_to_pick) == 0:
+                new_dice_to_pick.append(max(rolled_dice))
+            elif cls.dice_qualify(picked_dice + new_dice_to_pick):
+                new_dice_to_pick += cls.pick_when_qualifies(rolled_dice)
+        return new_dice_to_pick
+
+    @staticmethod
+    def pick_when_qualifies(rolled_dice):
+        values_to_keep = set([6])
+        if len(rolled_dice) == 2:
+            values_to_keep.add(5)
+        elif len(rolled_dice) == 1:
+            values_to_keep = values_to_keep.union([4, 5])
+        return [value for value in rolled_dice if value in values_to_keep]
+
+
+class CompoundStrategy:
     def __init__(self):
         pass
 
@@ -49,15 +145,7 @@ class Strategy:
         pass
 
 
-class BaseStrategy(Strategy):
-    """
-    Rules:
-
-    - If player does not have a 1 and it is rolled, pick it.
-    - If player does not have a 4 and it is rolled, pick it.
-    - If no dice has been picked, pick the highest one.
-    """
-
+class AlwaysConservativeStrategy(CompoundStrategy):
     @staticmethod
     def play(
         picked_dice: List[int],
@@ -66,68 +154,10 @@ class BaseStrategy(Strategy):
         players_left: Optional[int],
         current_pot: Optional[int],
     ) -> List[int]:
-        new_dice_to_pick = []
-        for value in MUST_HAVE_VALUES:
-            if value not in picked_dice and value in rolled_dice:
-                new_dice_to_pick.append(value)
-
-        if len(new_dice_to_pick) == 0:
-            new_dice_to_pick.append(max(rolled_dice))
-        return new_dice_to_pick
-
-
-class BaseStrategy2(Strategy):
-    """
-    Rules:
-
-    - If player does not have a 1 and it is rolled, pick it.
-    - If player does not have a 4 and it is rolled, pick it.
-    - Pick all 6s.
-    - If no dice has been picked, pick the highest one.
-    """
-
-    @staticmethod
-    def play(
-        picked_dice: List[int],
-        rolled_dice_: List[int],
-        top_score: Optional[Score],
-        players_left: Optional[int],
-        current_pot: Optional[int],
-    ) -> List[int]:
-        rolled_dice = rolled_dice_[:]
-        new_dice_to_pick = []
-        for value in MUST_HAVE_VALUES:
-            if value not in picked_dice and value in rolled_dice:
-                new_dice_to_pick.append(value)
-                rolled_dice.remove(value)
-
-        value_to_pick = 6
-        while value_to_pick in rolled_dice:
-            new_dice_to_pick.append(value_to_pick)
-            rolled_dice.remove(value_to_pick)
-
-        if len(new_dice_to_pick) == 0:
-            new_dice_to_pick.append(max(rolled_dice))
-        return new_dice_to_pick
-
-
-class PickMaxStrategy(Strategy):
-    """
-    Rules:
-
-    - Pick always the highest dice.
-    """
-
-    @staticmethod
-    def play(
-        picked_dice: List[int],
-        rolled_dice: List[int],
-        top_score: Optional[Score],
-        players_left: Optional[int],
-        current_pot: Optional[int],
-    ) -> List[int]:
-        new_dice_to_pick = [max(rolled_dice)]
-        return new_dice_to_pick
+        """
+        Decides which of the rolled dice have to be picked.
+        """
+        return ConservativeStrategy().play(picked_dice, rolled_dice)
 
 
 class Player:
@@ -141,7 +171,7 @@ class Player:
     def __init__(
         self,
         initial_stake: Optional[int] = None,
-        strategy: Strategy = BaseStrategy(),
+        strategy: CompoundStrategy = AlwaysConservativeStrategy(),
         name: Optional[str] = None,
     ) -> None:
         Player.PLAYER_NUMBER += 1
@@ -175,7 +205,7 @@ class Player:
         players_left: Optional[int] = None,
         current_pot: Optional[int] = None,
     ):
-        self.wager = 2 * ANTE
+        self.wager = ANTE
         while not self.has_finished():
             rolled_dice = roll_dice(N_DICE - len(self.picked_dice))
             new_dice_to_pick = self.strategy.play(
@@ -183,7 +213,7 @@ class Player:
             )
             self.pick_dice(new_dice_to_pick)
         if self.qualifies():
-            self.wager -= ANTE
+            self.wager += ANTE
         self.stake -= self.wager
 
     def pick_dice(self, new_dice_to_pick: List[int]) -> None:
@@ -220,9 +250,8 @@ class Game:
         self.hands_played: int = 0
         self._game_stats: Dict[str, List[Any]] = defaultdict(list)
         self.n_hands = n_hands  # Number of hands to be played
-        self.current_pot: int  # Pot at play in current hand
-        self.hand_winner: Player  # Last hand winner
-        self.hand_n_rounds: int  # Number of rounds in last hand
+        self.current_pot: int = 0  # Pot at play in current hand
+        self.last_round_stats: RoundStats
 
         # # Set random seed for reproducibility
         np.random.seed(random_seed)
@@ -234,42 +263,52 @@ class Game:
         """
         Run game simulation.
         """
+        if self.n_players == 0:
+            raise NoPlayerException
 
         while not self.has_finished():
-            self.play_hand()
+            self.play_round()
+            self.save_round_stats()
 
-    def play_hand(self) -> None:
+    def play_round(self) -> None:
         """
         Play one hand for each player, according to each player's strategy.
         """
-
-        players = self.sort_players()
-        self.current_pot = 0
-        n_rounds = 0
-        while len(players) > 1:
-            self.reset_players(self.players)
-            players = self.play_round(players)
-            n_rounds += 1
-            # print(self.hands_played, n_rounds, end="\t")
-            # for player in self.players:
-            #    print(player.score, end="; ")
-            # print()
-
-        winner = players[0]
-        winner.stake += self.current_pot
-        self.hand_winner = winner
-        self.hand_n_rounds = n_rounds
-
-        self.save_hand_stats()
-        # print(self.hands_played, self.hand_n_rounds, self.top_score, self.hand_winner)
-
-        self.hand_first_player = (self.hand_first_player + 1) % self.n_players
-        self.hands_played += 1
-
         self.reset_players(self.players)
 
-    def play_round(self, players):
+        winners = self.roll()
 
+        if len(winners) == 1:  # There is a single winner
+            winner = winners[0]
+            winner.stake += self.current_pot
+
+            # Last winner starts next hand
+            self.hand_first_player = self.players.index(winner)
+
+            self.hand_winner = winner.name
+            self.last_round_stats = RoundStats(
+                self.hands_played,
+                winner.name,
+                self.current_pot,
+                self.scores,
+            )
+            self.current_pot = 0
+
+        else:  # There is a tie
+
+            # Last tied player starts next hand
+            self.hand_first_player = self.players.index(winners[-1])
+
+            self.last_round_stats = RoundStats(
+                self.hands_played,
+                "Tie",
+                self.current_pot,
+                self.scores,
+            )
+        self.hands_played += 1
+
+    def roll(self) -> List[Player]:
+        players = self.sort_players()
         for i, player in enumerate(players, start=1):
             players_left = self.n_players - i
             player.play(
@@ -281,8 +320,8 @@ class Game:
 
         # top_score = max([player.score for player in players])
         top_score = self.top_score
-        players = [player for player in players if player.score == top_score]
-        return players
+        winners = [player for player in players if player.score == top_score]
+        return winners
 
     def sort_players(self) -> List[Player]:
         first_player = self.hand_first_player
@@ -291,13 +330,13 @@ class Game:
     def has_finished(self) -> bool:
         return self.hands_played == self.n_hands
 
-    def save_hand_stats(self):
+    def save_round_stats(self):
 
         hand_stats = {
-            "HAND": self.hands_played,
-            "ROUNDS": self.hand_n_rounds,
-            "WINNER": self.hand_winner.name,
-            "SCORES": [player.score for player in self.players],
+            "ROUND": self.last_round_stats.round,
+            "POT": self.last_round_stats.pot,
+            "WINNER": self.last_round_stats.winner,
+            "SCORES": self.last_round_stats.scores,
         }
         for key, value in hand_stats.items():
             self._game_stats[key].append(value)
@@ -315,58 +354,85 @@ class Game:
         return sum([player.has_finished() for player in self.players])
 
     @property
-    def scores(self) -> Dict[str, int]:
-        return {player.name: player.score for player in self.players}
+    def scores(self) -> List[Score]:
+        return [player.score for player in self.players]
 
     @property
     def top_score(self) -> Score:
         return Score(max([player.score for player in self.players]))
 
     @property
-    def round_winner(self) -> Player:
-        return list(sorted(self.players, reverse=True))[0]
+    def stakes(self) -> List[int]:
+        return [player.stake for player in self.players]
 
     @property
-    def stakes(self) -> Dict[str, int]:
-        return {player.name: player.stake for player in self.players}
-
-    @property
-    def relative_stakes(self) -> Dict[str, int]:
-        return {player.name: player.relative_stake for player in self.players}
+    def relative_stakes(self) -> List[int]:
+        return [player.relative_stake for player in self.players]
 
     @property
     def game_stats(self) -> pd.DataFrame:
         return pd.DataFrame(self._game_stats)
 
+    def get_player_scores(self, player_index: int) -> List[Score]:
+        return [row[player_index] for row in self.game_stats["SCORES"].values]
+
+    def get_scores(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                player.name: self.get_player_scores(i)
+                for i, player in enumerate(self.players)
+            }
+        )
+
 
 if __name__ == "__main__":
 
-    player1 = Player(strategy=BaseStrategy())
-    player2 = Player(strategy=BaseStrategy2())
+    n_rounds = 10000
+    n_players = 2
+    initial_stake = 1000
 
-    game = Game()
+    print("-----------------")
+    print("Game settings")
+    print(f"Number of players: {n_players}")
+    print(f"Number of rounds: {n_rounds}")
+    print(f"Initial stake: {initial_stake}")
+    print("-----------------")
+    print()
 
-    game.add_player(player1)
-    # game.add_player(player2)
+    game = Game(n_hands=n_rounds)
+    for i in range(n_players):
+        player = Player(
+            strategy=AlwaysConservativeStrategy(), initial_stake=initial_stake
+        )
+        game.add_player(player)
 
+    # Play game
     game.play()
 
-    print(game.scores)
+    print("-----------------")
+    print("Game stats")
+    stats = game.game_stats
+    print(stats.head(10))
+    print("-----------------")
+    print()
+    print(f"Final relative stakes: {game.relative_stakes}")
+    print()
 
-    n_hands = 10000
+    print("-----------------")
+    print("Scores")
+    scores = game.get_scores()
+    print(scores.head())
+    print("-----------------")
+    print()
 
-    Player.reset_counter()
-    player1 = Player(strategy=BaseStrategy())
-    player2 = Player(strategy=BaseStrategy())
-    player3 = Player(strategy=BaseStrategy())
+    print("-----------------")
+    print("Qualification rate per player:")
+    print((scores > 0).mean())
+    print("-----------------")
+    print()
 
-    game = Game(n_hands=n_hands)
-    game.add_player(player1)
-    game.add_player(player2)
-    game.add_player(player3)
-    game.play()
-
-    df = game.game_stats
-    print(df.head())
-    print(df["ROUNDS"].value_counts().sort_index())
-    print(df["WINNER"].value_counts(normalize=True))
+    print("-----------------")
+    print("Win rate per player:")
+    print(stats["WINNER"].value_counts(normalize=True))
+    print("-----------------")
+    print()

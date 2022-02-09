@@ -80,10 +80,10 @@ class TestPlayer:
         player.stake = 2
         player.strategy = mock_strategy_1_4
         player.play()
-        assert player.stake == 1
+        assert player.stake == 0
 
     def test_play_stake_does_not_qualifies(self, player, mock_strategy_1):
         player.stake = 2
         player.strategy = mock_strategy_1
         player.play()
-        assert player.stake == 0
+        assert player.stake == 1
