@@ -1,7 +1,9 @@
 from abc import abstractmethod
 from typing import Iterable, List, Optional
 
-from .utils import MUST_HAVE_VALUES, Score
+import numpy as np
+
+from .utils import QUALIFIERS, N_DICE, Score, dice_qualify, roll_dice, score_dice
 
 
 class SimpleStrategy:
@@ -14,8 +16,18 @@ class SimpleStrategy:
         pass
 
     @classmethod
-    @abstractmethod
     def play(
+        cls,
+        kept_dice: List[int],
+        rolled_dice: List[int],
+    ) -> List[int]:
+        new_dice_to_keep = cls._play(kept_dice, rolled_dice)
+        assert len(new_dice_to_keep) > 0
+        return new_dice_to_keep
+
+    @classmethod
+    @abstractmethod
+    def _play(
         cls,
         kept_dice: List[int],
         rolled_dice: List[int],
@@ -27,7 +39,19 @@ class SimpleStrategy:
 
     @staticmethod
     def dice_qualify(dice: Iterable[int]) -> bool:
-        return MUST_HAVE_VALUES.issubset(dice)
+        return dice_qualify(dice)
+
+    @classmethod
+    def sample(cls, nsamples: int = 1000) -> List[Score]:
+        scores: List[Score] = []
+        for _ in range(nsamples):
+            kept_dice: List = []
+            while len(kept_dice) < N_DICE:
+                rolled_dice = roll_dice(N_DICE - len(kept_dice))
+                new_dice_to_keep = cls.play(kept_dice, rolled_dice)
+                kept_dice += new_dice_to_keep
+            scores.append(score_dice(kept_dice))
+        return scores
 
 
 class ConservativeStrategy(SimpleStrategy):
@@ -44,7 +68,7 @@ class ConservativeStrategy(SimpleStrategy):
     """
 
     @classmethod
-    def play(
+    def _play(
         cls,
         kept_dice: List[int],
         rolled_dice: List[int],
@@ -52,18 +76,23 @@ class ConservativeStrategy(SimpleStrategy):
         """
         Decides which of the rolled dice have to be kept.
         """
-        new_dice_to_keep = []
-        if cls.dice_qualify(kept_dice):
+        new_dice_to_keep: List[int] = []
+
+        # TODO: make this a function. Maybe this will require to define instance
+        # methods instead of class methods
+        for die in rolled_dice:
+            all_kept_dice = kept_dice + new_dice_to_keep
+            if cls.dice_qualify(all_kept_dice):
+                break
+            if die in QUALIFIERS and die not in kept_dice:
+                new_dice_to_keep.append(die)
+
+        for die in new_dice_to_keep:
+            rolled_dice.remove(die)
+        if cls.dice_qualify(kept_dice + new_dice_to_keep):
             new_dice_to_keep += cls.keep_when_qualifies(rolled_dice)
-        else:
-            for value in MUST_HAVE_VALUES:
-                if value not in kept_dice and value in rolled_dice:
-                    new_dice_to_keep.append(value)
-                    rolled_dice.remove(value)
-            if len(new_dice_to_keep) == 0:
-                new_dice_to_keep.append(max(rolled_dice))
-            elif cls.dice_qualify(kept_dice + new_dice_to_keep):
-                new_dice_to_keep += cls.keep_when_qualifies(rolled_dice)
+        if len(new_dice_to_keep) == 0:
+            new_dice_to_keep.append(max(rolled_dice))
         return new_dice_to_keep
 
     @staticmethod
@@ -75,6 +104,88 @@ class ConservativeStrategy(SimpleStrategy):
         else:
             values_to_keep = [6]
         return [value for value in rolled_dice if value in values_to_keep]
+
+
+class MiddleStrategy(SimpleStrategy):
+    """
+    Rules:
+
+    For each roll:
+        If player does not qualify:
+            Keep the required dice if they were rolled, otherwise keep highest.
+        Else:
+            If one dice left, keep all 4, 5 or 6.
+            If two dice left, keep all 5 or 6
+            Else, keep all 6
+    """
+
+    @classmethod
+    def _play(
+        cls,
+        kept_dice: List[int],
+        rolled_dice: List[int],
+    ) -> List[int]:
+        """
+        Decides which of the rolled dice have to be kept.
+        """
+        new_dice_to_keep: List[int] = []
+
+        first_roll = len(kept_dice) == 0
+
+        if first_roll:
+            number_of_sixes = sum(np.array(rolled_dice) == 6)
+            qualifiers_rolled = QUALIFIERS.intersection(rolled_dice)
+            if qualifiers_rolled == QUALIFIERS:
+                if number_of_sixes > 0:
+                    new_dice_to_keep = list(qualifiers_rolled) + [6] * number_of_sixes
+                else:
+                    for die in rolled_dice:
+                        if die in QUALIFIERS:
+                            new_dice_to_keep.append(die)
+                            break
+            elif len(qualifiers_rolled) == 1:
+                new_dice_to_keep += list(qualifiers_rolled) + [6] * min(
+                    1, number_of_sixes
+                )
+        else:
+            for die in rolled_dice:
+                all_kept_dice = kept_dice + new_dice_to_keep
+                if cls.dice_qualify(all_kept_dice):
+                    break
+                if die in QUALIFIERS and die not in kept_dice:
+                    new_dice_to_keep.append(die)
+
+        for die in new_dice_to_keep:
+            rolled_dice.remove(die)
+
+        if cls.dice_qualify(kept_dice + new_dice_to_keep):
+            new_dice_to_keep += cls.keep_when_qualifies(rolled_dice)
+        if len(new_dice_to_keep) == 0:
+            new_dice_to_keep.append(max(rolled_dice))
+        return new_dice_to_keep
+
+    @staticmethod
+    def keep_when_qualifies(rolled_dice):
+        return ConservativeStrategy.keep_when_qualifies(rolled_dice)
+
+
+class AgressiveStrategy(SimpleStrategy):
+    """
+    Rules:
+
+    TODO
+    """
+
+    @classmethod
+    def play(
+        cls,
+        kept_dice: List[int],
+        rolled_dice: List[int],
+    ) -> List[int]:
+        """
+        Decides which of the rolled dice have to be kept.
+        """
+        pass
 
 
 class CompoundStrategy:
@@ -116,3 +227,19 @@ class AlwaysConservativeStrategy(CompoundStrategy):
         current_pot: Optional[int],
     ) -> List[int]:
         return ConservativeStrategy().play(kept_dice, rolled_dice)
+
+
+class AlwaysMiddleStrategy(CompoundStrategy):
+    """
+    Use always a conservative strategy, no matter the external variables.
+    """
+
+    @staticmethod
+    def play(
+        kept_dice: List[int],
+        rolled_dice: List[int],
+        top_score: Optional[Score],
+        players_left: Optional[int],
+        current_pot: Optional[int],
+    ) -> List[int]:
+        return MiddleStrategy().play(kept_dice, rolled_dice)

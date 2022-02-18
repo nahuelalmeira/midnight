@@ -1,7 +1,15 @@
 from typing import List, Optional
 
 from .strategy import AlwaysConservativeStrategy, CompoundStrategy
-from .utils import ANTE, INF_STAKE, MUST_HAVE_VALUES, N_DICE, Score, roll_dice
+from .utils import (
+    ANTE,
+    INF_STAKE,
+    dice_qualify,
+    N_DICE,
+    Score,
+    roll_dice,
+    score_dice,
+)
 
 
 class Player:
@@ -87,7 +95,7 @@ class Player:
         """
         A player qualifies when they kept a 1 and a 4.
         """
-        return MUST_HAVE_VALUES.issubset(self.kept_dice)
+        return dice_qualify(self.kept_dice)
 
     def reset(self) -> None:
         """
@@ -101,10 +109,4 @@ class Player:
         """
         Compute and return player score.
         """
-        s = sum(self.kept_dice)
-        for must_have_value in MUST_HAVE_VALUES:
-            if must_have_value not in self.kept_dice:
-                return Score(0)
-            else:
-                s -= must_have_value
-        return Score(s)
+        return score_dice(self.kept_dice)
