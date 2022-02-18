@@ -27,32 +27,32 @@ def mock_strategy_1():
 
 class TestPlayer:
     def test_does_qualifies(self, player):
-        player.picked_dice = [1, 4]
+        player.kept_dice = [1, 4]
         assert player.qualifies()
 
     def test_does_not_qualifies(self, player):
-        player.picked_dice = [1, 5]
+        player.kept_dice = [1, 5]
         assert not player.qualifies()
 
     def test_has_finished(self, player):
-        player.picked_dice = [1, 1, 1, 3, 4, 5]
+        player.kept_dice = [1, 1, 1, 3, 4, 5]
         assert player.has_finished()
 
     def test_has_not_finished(self, player):
-        player.picked_dice = [1, 3, 4, 5]
+        player.kept_dice = [1, 3, 4, 5]
         assert not player.has_finished()
 
-    def test_pick_dice(self, player):
-        player.picked_dice = [1]
-        player.pick_dice([2, 2])
-        assert player.picked_dice == [1, 2, 2]
+    def test_keep_dice(self, player):
+        player.kept_dice = [1]
+        player.keep_dice([2, 2])
+        assert player.kept_dice == [1, 2, 2]
 
     def test_score_is_zero(self, player):
-        player.picked_dice = [1, 5, 6]
+        player.kept_dice = [1, 5, 6]
         assert player.score == 0
 
     def test_score_is_nonzero(self, player):
-        player.picked_dice = [1, 4, 5, 6]
+        player.kept_dice = [1, 4, 5, 6]
         assert player.score == 11
 
     def test_name(self):
@@ -74,7 +74,7 @@ class TestPlayer:
 
         player.strategy = mock_strategy_1_4
         player.play()
-        assert player.picked_dice == [1, 4, 1, 4, 1, 4]
+        assert player.kept_dice == [1, 4, 1, 4, 1, 4]
 
     def test_play_stake_does_qualifies(self, player, mock_strategy_1_4):
         player.stake = 2
