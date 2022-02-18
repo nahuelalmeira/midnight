@@ -1,7 +1,7 @@
-from typing import Optional, List
+from typing import List, Optional
 
-from .strategy import CompoundStrategy, AlwaysConservativeStrategy
-from .utils import INF_STAKE, Score, ANTE, roll_dice, N_DICE, MUST_HAVE_VALUES
+from .strategy import AlwaysConservativeStrategy, CompoundStrategy
+from .utils import ANTE, INF_STAKE, MUST_HAVE_VALUES, N_DICE, Score, roll_dice
 
 
 class Player:

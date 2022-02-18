@@ -1,5 +1,7 @@
 from unittest.mock import Mock
+
 import pytest
+
 from midnight.game import Game, NoPlayerException
 
 

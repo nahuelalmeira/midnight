@@ -1,4 +1,5 @@
 import pytest
+
 from midnight.utils import InvalidScoreException, Score
 
 

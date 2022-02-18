@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import List, Iterable, Optional
+from typing import Iterable, List, Optional
 
 from .utils import MUST_HAVE_VALUES, Score
 
