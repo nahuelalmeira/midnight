@@ -1,5 +1,5 @@
 import pytest
-from midnight.main import Player
+from midnight.player import Player
 
 
 @pytest.fixture

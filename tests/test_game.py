@@ -1,6 +1,6 @@
 from unittest.mock import Mock
 import pytest
-from midnight.main import Game, NoPlayerException
+from midnight.game import Game, NoPlayerException
 
 
 class TestGame:
