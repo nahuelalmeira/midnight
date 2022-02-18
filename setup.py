@@ -1,3 +1,3 @@
 import setuptools  # type: ignore
 
-setuptools.setup()
+setuptools.setup(packages=setuptools.find_packages())
