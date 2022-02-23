@@ -78,7 +78,7 @@ class Player:
                 self.kept_dice, rolled_dice, top_score, players_left, current_pot
             )
             self.keep_dice(new_dice_to_keep)
-        if self.qualifies():
+        if not self.qualifies():
             self.wager += ANTE
         self.stake -= self.wager
 

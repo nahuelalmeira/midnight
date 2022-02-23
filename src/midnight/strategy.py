@@ -96,7 +96,25 @@ class ConservativeStrategy(SimpleStrategy):
         return new_dice_to_keep
 
     @staticmethod
-    def keep_when_qualifies(rolled_dice):
+    def keep_when_qualifies(rolled_dice: List[int]) -> List[int]:
+        dice_to_keep: List[int] = []
+        finish = 0
+        while not finish:
+            if 6 in rolled_dice:
+                dice_to_keep.append(6)
+                rolled_dice.remove(6)
+            elif len(rolled_dice) <= 2 and 5 in rolled_dice:
+                dice_to_keep.append(5)
+                rolled_dice.remove(5)
+            elif len(rolled_dice) == 1 and 4 in rolled_dice:
+                dice_to_keep.append(4)
+                rolled_dice.remove(4)
+            else:
+                finish = 1
+        return dice_to_keep
+
+    @staticmethod
+    def _keep_when_qualifies(rolled_dice):
         if len(rolled_dice) == 1:
             values_to_keep = [4, 5, 6]
         elif len(rolled_dice) == 2:

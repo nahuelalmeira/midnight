@@ -30,7 +30,7 @@ class TestConservativeStrategy:
 
         kept_dice = [1, 4, 6, 6]
         rolled_dice = [5, 4]
-        assert ConservativeStrategy.play(kept_dice, rolled_dice) == [5]
+        assert ConservativeStrategy.play(kept_dice, rolled_dice) == [5, 4]
 
     def test6(self):
 
@@ -61,6 +61,30 @@ class TestConservativeStrategy:
         kept_dice = [4, 6, 6, 6]
         rolled_dice = [1, 3]
         assert ConservativeStrategy.play(kept_dice, rolled_dice) == [1]
+
+    def test11(self):
+
+        kept_dice = []
+        rolled_dice = [1, 4, 6, 6, 6, 5]
+        assert ConservativeStrategy.play(kept_dice, rolled_dice) == [1, 4, 6, 6, 6, 5]
+
+    def test12(self):
+
+        kept_dice = []
+        rolled_dice = [1, 4, 6, 6, 6, 4]
+        assert ConservativeStrategy.play(kept_dice, rolled_dice) == [1, 4, 6, 6, 6, 4]
+
+    def test13(self):
+
+        kept_dice = []
+        rolled_dice = [1, 4, 6, 6, 6, 3]
+        assert ConservativeStrategy.play(kept_dice, rolled_dice) == [1, 4, 6, 6, 6]
+
+    def test14(self):
+
+        kept_dice = []
+        rolled_dice = [1, 4, 6, 6, 5, 2]
+        assert ConservativeStrategy.play(kept_dice, rolled_dice) == [1, 4, 6, 6, 5]
 
 
 class TestMiddleStrategy:
