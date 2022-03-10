@@ -1,9 +1,76 @@
 from abc import abstractmethod
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Set
 
 import numpy as np
 
 from .utils import QUALIFIERS, N_DICE, Score, dice_qualify, roll_dice, score_dice
+
+
+class Strategy:
+    def play(self, kept_dice: List[int], rolled_dice: List[int]) -> List[int]:
+        self.set_dice(kept_dice, rolled_dice)
+        die_to_keep = self.play_step()
+        while True:
+            if die_to_keep is None:
+                return list(set(self.kept_dice).difference(self.starting_kept_dice))
+            self.update_dice(die_to_keep)
+            die_to_keep = self.play_step()
+
+    def set_dice(self, kept_dice: List[int], rolled_dice: List[int]) -> None:
+        self.starting_kept_dice = kept_dice[:]
+        self.kept_dice = kept_dice[:]
+        self.rolled_dice = rolled_dice[:]
+
+    def update_dice(self, die_to_keep: int) -> None:
+        self.kept_dice.append(die_to_keep)
+        self.rolled_dice.remove(die_to_keep)
+
+    def play_step(self) -> Optional[int]:
+        ret: Optional[int] = None
+        ret = self._play_step()
+        if not self.has_picked:
+            ret = max(self.rolled_dice)
+        return ret
+
+    @abstractmethod
+    def _play_step(self) -> Optional[int]:
+        pass
+
+    @property
+    def has_picked(self) -> bool:
+        return len(self.kept_dice) > len(self.starting_kept_dice)
+
+    @property
+    def qualifies(self) -> bool:
+        return dice_qualify(self.kept_dice)
+
+    @property
+    def kept_qualifiers(self) -> Set[int]:
+        return QUALIFIERS.intersection(self.kept_dice)
+
+    @property
+    def n_qualifiers(self) -> int:
+        return len(self.kept_qualifiers)
+
+    def pick_rolled_qualifier(self) -> Optional[int]:
+        rolled_qualifiers = QUALIFIERS.intersection(self.rolled_dice)
+        return rolled_qualifiers.pop() if len(rolled_qualifiers) > 0 else None
+
+    def sample(self, nsamples: int = 1000) -> List[Score]:
+        scores: List[Score] = []
+        for _ in range(nsamples):
+            kept_dice: List = []
+            while len(kept_dice) < N_DICE:
+                rolled_dice = roll_dice(N_DICE - len(kept_dice))
+                new_dice_to_keep = self.play(kept_dice, rolled_dice)
+                kept_dice += new_dice_to_keep
+            scores.append(score_dice(kept_dice))
+        return scores
+
+
+class Strategy1(Strategy):
+    def _play_step(self) -> Optional[int]:
+        return self.pick_rolled_qualifier() if not self.qualifies else None
 
 
 class SimpleStrategy:
@@ -76,6 +143,8 @@ class ConservativeStrategy(SimpleStrategy):
         """
         Decides which of the rolled dice have to be kept.
         """
+        rolled_dice = rolled_dice[:]  # Copy list
+
         new_dice_to_keep: List[int] = []
 
         # TODO: make this a function. Maybe this will require to define instance
@@ -127,14 +196,6 @@ class ConservativeStrategy(SimpleStrategy):
 class MiddleStrategy(SimpleStrategy):
     """
     Rules:
-
-    For each roll:
-        If player does not qualify:
-            Keep the required dice if they were rolled, otherwise keep highest.
-        Else:
-            If one dice left, keep all 4, 5 or 6.
-            If two dice left, keep all 5 or 6
-            Else, keep all 6
     """
 
     @classmethod
@@ -146,6 +207,7 @@ class MiddleStrategy(SimpleStrategy):
         """
         Decides which of the rolled dice have to be kept.
         """
+        rolled_dice = rolled_dice[:]  # Copy list
         new_dice_to_keep: List[int] = []
 
         first_roll = len(kept_dice) == 0
@@ -167,8 +229,168 @@ class MiddleStrategy(SimpleStrategy):
                 )
         else:
             for die in rolled_dice:
-                all_kept_dice = kept_dice + new_dice_to_keep
-                if cls.dice_qualify(all_kept_dice):
+                if cls.dice_qualify(kept_dice + new_dice_to_keep):
+                    break
+                if die in QUALIFIERS and die not in kept_dice:
+                    new_dice_to_keep.append(die)
+
+        for die in new_dice_to_keep:
+            rolled_dice.remove(die)
+
+        if cls.dice_qualify(kept_dice + new_dice_to_keep):
+            new_dice_to_keep += cls.keep_when_qualifies(rolled_dice)
+        if len(new_dice_to_keep) == 0:
+            new_dice_to_keep.append(max(rolled_dice))
+        return new_dice_to_keep
+
+    @staticmethod
+    def keep_when_qualifies(rolled_dice):
+        return ConservativeStrategy.keep_when_qualifies(rolled_dice)
+
+
+class MiddleStrategyVarTwo6(SimpleStrategy):
+    """
+    Rules:
+    """
+
+    @classmethod
+    def _play(
+        cls,
+        kept_dice: List[int],
+        rolled_dice: List[int],
+    ) -> List[int]:
+        """
+        Decides which of the rolled dice have to be kept.
+        """
+        rolled_dice = rolled_dice[:]  # Copy list
+        new_dice_to_keep: List[int] = []
+
+        first_roll = len(kept_dice) == 0
+
+        if first_roll:
+            number_of_sixes = sum(np.array(rolled_dice) == 6)
+            qualifiers_rolled = QUALIFIERS.intersection(rolled_dice)
+            if qualifiers_rolled == QUALIFIERS:
+                if number_of_sixes > 0:
+                    new_dice_to_keep = list(qualifiers_rolled) + [6] * number_of_sixes
+                else:
+                    for die in rolled_dice:
+                        if die in QUALIFIERS:
+                            new_dice_to_keep.append(die)
+                            break
+            elif len(qualifiers_rolled) == 1:
+                new_dice_to_keep += list(qualifiers_rolled) + [6] * min(
+                    2, number_of_sixes
+                )
+        else:
+            for die in rolled_dice:
+                if cls.dice_qualify(kept_dice + new_dice_to_keep):
+                    break
+                if die in QUALIFIERS and die not in kept_dice:
+                    new_dice_to_keep.append(die)
+
+        for die in new_dice_to_keep:
+            rolled_dice.remove(die)
+
+        if cls.dice_qualify(kept_dice + new_dice_to_keep):
+            new_dice_to_keep += cls.keep_when_qualifies(rolled_dice)
+        if len(new_dice_to_keep) == 0:
+            new_dice_to_keep.append(max(rolled_dice))
+        return new_dice_to_keep
+
+    @staticmethod
+    def keep_when_qualifies(rolled_dice):
+        return ConservativeStrategy.keep_when_qualifies(rolled_dice)
+
+
+class MiddleStrategyVarTwo6NoQualifier(SimpleStrategy):
+    """
+    Rules:
+    """
+
+    @classmethod
+    def _play(
+        cls,
+        kept_dice: List[int],
+        rolled_dice: List[int],
+    ) -> List[int]:
+        """
+        Decides which of the rolled dice have to be kept.
+        """
+        rolled_dice = rolled_dice[:]  # Copy list
+        new_dice_to_keep: List[int] = []
+
+        first_roll = len(kept_dice) == 0
+
+        if first_roll:
+            number_of_sixes = sum(np.array(rolled_dice) == 6)
+            qualifiers_rolled = QUALIFIERS.intersection(rolled_dice)
+            if qualifiers_rolled == QUALIFIERS:
+                if number_of_sixes > 0:
+                    new_dice_to_keep = list(qualifiers_rolled) + [6] * number_of_sixes
+                else:
+                    for die in rolled_dice:
+                        if die in QUALIFIERS:
+                            new_dice_to_keep.append(die)
+                            break
+            elif len(qualifiers_rolled) == 1:
+                new_dice_to_keep += [6] * min(2, number_of_sixes)
+        else:
+            for die in rolled_dice:
+                if cls.dice_qualify(kept_dice + new_dice_to_keep):
+                    break
+                if die in QUALIFIERS and die not in kept_dice:
+                    new_dice_to_keep.append(die)
+
+        for die in new_dice_to_keep:
+            rolled_dice.remove(die)
+
+        if cls.dice_qualify(kept_dice + new_dice_to_keep):
+            new_dice_to_keep += cls.keep_when_qualifies(rolled_dice)
+        if len(new_dice_to_keep) == 0:
+            new_dice_to_keep.append(max(rolled_dice))
+        return new_dice_to_keep
+
+    @staticmethod
+    def keep_when_qualifies(rolled_dice):
+        return ConservativeStrategy.keep_when_qualifies(rolled_dice)
+
+
+class MiddleToAggressiveStrategy(SimpleStrategy):
+    """
+    Rules:
+    """
+
+    @classmethod
+    def _play(
+        cls,
+        kept_dice: List[int],
+        rolled_dice: List[int],
+    ) -> List[int]:
+        """
+        Decides which of the rolled dice have to be kept.
+        """
+        rolled_dice = rolled_dice[:]  # Copy list
+        new_dice_to_keep: List[int] = []
+
+        first_roll = len(kept_dice) == 0
+
+        if first_roll:
+            number_of_sixes = sum(np.array(rolled_dice) == 6)
+            qualifiers_rolled = QUALIFIERS.intersection(rolled_dice)
+            if qualifiers_rolled == QUALIFIERS:
+                if number_of_sixes > 0:
+                    new_dice_to_keep = list(qualifiers_rolled) + [6] * number_of_sixes
+                else:
+                    for die in rolled_dice:
+                        if die in QUALIFIERS:
+                            new_dice_to_keep.append(die)
+                            break
+            elif len(qualifiers_rolled) == 1:
+                new_dice_to_keep += [6] * min(1, number_of_sixes)
+        else:
+            for die in rolled_dice:
+                if cls.dice_qualify(kept_dice + new_dice_to_keep):
                     break
                 if die in QUALIFIERS and die not in kept_dice:
                     new_dice_to_keep.append(die)
