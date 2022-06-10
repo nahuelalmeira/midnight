@@ -4,5 +4,7 @@ isort
 ipykernel
 ipython
 mypy
+nbformat
 pandas-stubs
+pre-commit
 pytest
