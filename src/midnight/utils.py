@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Set, Iterable
+from typing import Iterable, List, Set
 
 import numpy as np
 

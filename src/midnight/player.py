@@ -1,15 +1,7 @@
 from typing import List, Optional
 
 from .strategy import AlwaysConservativeStrategy, CompoundStrategy
-from .utils import (
-    ANTE,
-    INF_STAKE,
-    dice_qualify,
-    N_DICE,
-    Score,
-    roll_dice,
-    score_dice,
-)
+from .utils import ANTE, INF_STAKE, N_DICE, Score, dice_qualify, roll_dice, score_dice
 
 
 class Player:
