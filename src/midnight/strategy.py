@@ -2,8 +2,9 @@ from abc import abstractmethod
 from typing import Iterable, List, Optional
 
 import numpy as np
+import pandas as pd
 
-from .utils import QUALIFIERS, N_DICE, Score, dice_qualify, roll_dice, score_dice
+from .utils import N_DICE, QUALIFIERS, Score, dice_qualify, roll_dice, score_dice
 
 
 class SimpleStrategy:
@@ -21,7 +22,7 @@ class SimpleStrategy:
         kept_dice: List[int],
         rolled_dice: List[int],
     ) -> List[int]:
-        new_dice_to_keep = cls._play(kept_dice, rolled_dice)
+        new_dice_to_keep = cls._play(list(kept_dice), list(rolled_dice))
         assert len(new_dice_to_keep) > 0
         return new_dice_to_keep
 
@@ -42,16 +43,34 @@ class SimpleStrategy:
         return dice_qualify(dice)
 
     @classmethod
-    def sample(cls, nsamples: int = 1000) -> List[Score]:
+    def sample(cls, nsamples: int = 1000, start_dice: List = [int]) -> List[Score]:
         scores: List[Score] = []
         for _ in range(nsamples):
-            kept_dice: List = []
+            kept_dice = list(start_dice)
             while len(kept_dice) < N_DICE:
                 rolled_dice = roll_dice(N_DICE - len(kept_dice))
                 new_dice_to_keep = cls.play(kept_dice, rolled_dice)
                 kept_dice += new_dice_to_keep
             scores.append(score_dice(kept_dice))
         return scores
+
+    def show_example(
+        cls, start_dice: List = [int], start_roll: Optional[List[int]] = None
+    ) -> pd.DataFrame:
+        kept_dice = list(start_dice)
+        data = []
+        if start_roll is None:
+            rolled_dice = roll_dice(N_DICE - len(kept_dice))
+        else:
+            assert len(start_dice) + len(start_roll) == N_DICE
+            rolled_dice = list(start_roll)
+        while len(kept_dice) < N_DICE:
+            new_dice_to_keep = cls.play(kept_dice, rolled_dice)
+            data.append([list(kept_dice), rolled_dice, new_dice_to_keep])
+            kept_dice += new_dice_to_keep
+            rolled_dice = roll_dice(N_DICE - len(kept_dice))
+        df = pd.DataFrame(data, columns=["Kept dice", "Roll", "New dice"])
+        return df
 
 
 class ConservativeStrategy(SimpleStrategy):
