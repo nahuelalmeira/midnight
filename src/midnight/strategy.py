@@ -43,7 +43,7 @@ class SimpleStrategy:
         return dice_qualify(dice)
 
     @classmethod
-    def sample(cls, nsamples: int = 1000, start_dice: List = [int]) -> List[Score]:
+    def sample(cls, nsamples: int = 1000, start_dice: List[int] = []) -> List[Score]:
         scores: List[Score] = []
         for _ in range(nsamples):
             kept_dice = list(start_dice)
@@ -55,14 +55,15 @@ class SimpleStrategy:
         return scores
 
     def show_example(
-        cls, start_dice: List = [int], start_roll: Optional[List[int]] = None
+        cls, start_dice: List[int] = [], start_roll: Optional[List[int]] = None
     ) -> pd.DataFrame:
         kept_dice = list(start_dice)
         data = []
         if start_roll is None:
             rolled_dice = roll_dice(N_DICE - len(kept_dice))
         else:
-            assert len(start_dice) + len(start_roll) == N_DICE
+            if len(start_dice) + len(start_roll) != N_DICE:
+                raise ValueError(f"The number of dice must be equal to {N_DICE}.")
             rolled_dice = list(start_roll)
         while len(kept_dice) < N_DICE:
             new_dice_to_keep = cls.play(kept_dice, rolled_dice)
