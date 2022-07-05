@@ -1,7 +1,27 @@
+import pandas as pd
+
 from midnight.strategy import ConservativeStrategy, MiddleStrategy
 
 
 class TestConservativeStrategy:
+    def test_scoring_probability(self):
+        expected = 1 - (2 * (5 / 6) ** 21 - (4 / 6) ** 21)
+        nsamples = 10000
+        obtained = (
+            1
+            - pd.Series(ConservativeStrategy().sample(nsamples)).value_counts(
+                normalize=True
+            )[0]
+        )
+        epsilon = 1e-2
+        assert obtained - epsilon < expected < obtained + epsilon
+
+    def test_dont_keep_repeated_qualifiers(self):
+
+        kept_dice = []
+        rolled_dice = [1, 1, 6, 3, 3, 3]
+        assert ConservativeStrategy.play(kept_dice, rolled_dice) == [1]
+
     def test1(self):
 
         kept_dice = []

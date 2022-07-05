@@ -106,6 +106,7 @@ class ConservativeStrategy(SimpleStrategy):
                 break
             if die in QUALIFIERS and die not in kept_dice:
                 new_dice_to_keep.append(die)
+                kept_dice.append(die)
 
         for die in new_dice_to_keep:
             rolled_dice.remove(die)
